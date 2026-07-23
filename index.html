@@ -1,0 +1,1828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — OI Trading Journal</title>
+<style>
+/* ============================================================
+   TOKENS
+   ============================================================ */
+:root{
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Menlo", "Cascadia Mono", "Consolas", monospace;
+
+  --radius-sm: 3px;
+  --radius-md: 6px;
+
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+
+  --win: #1e8e5a;
+  --win-soft: rgba(30,142,90,0.12);
+  --lose: #c8442c;
+  --lose-soft: rgba(200,68,44,0.12);
+  --accent: #2f5fe0;
+  --accent-soft: rgba(47,95,224,0.10);
+  --warn: #b7791f;
+
+  --dur: 160ms;
+  --ease: cubic-bezier(.2,.7,.3,1);
+}
+
+[data-theme="light"]{
+  --bg: #f3f0e8;
+  --bg-elevated: #fbf9f3;
+  --bg-sunken: #eae6da;
+  --text: #17171a;
+  --text-muted: #6b6a63;
+  --text-faint: #9c9a90;
+  --border: rgba(23,23,26,0.13);
+  --border-strong: rgba(23,23,26,0.28);
+  --noise-opacity: 0.05;
+  --shadow: 0 1px 2px rgba(23,23,26,0.06), 0 8px 24px rgba(23,23,26,0.05);
+  color-scheme: light;
+}
+[data-theme="dark"]{
+  --bg: #131313;
+  --bg-elevated: #1b1b1b;
+  --bg-sunken: #0d0d0d;
+  --text: #f1efe6;
+  --text-muted: #99968b;
+  --text-faint: #676459;
+  --border: rgba(241,239,230,0.11);
+  --border-strong: rgba(241,239,230,0.24);
+  --noise-opacity: 0.06;
+  --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px rgba(0,0,0,0.35);
+  color-scheme: dark;
+}
+
+*{ box-sizing: border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  min-height: 100vh;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+/* paper grain */
+body::before{
+  content:"";
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  opacity: var(--noise-opacity);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+::selection{ background: var(--accent); color:#fff; }
+
+a{ color: inherit; }
+
+.mono{ font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.num{ font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.muted{ color: var(--text-muted); }
+.faint{ color: var(--text-faint); }
+.win-c{ color: var(--win); }
+.lose-c{ color: var(--lose); }
+.accent-c{ color: var(--accent); }
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.wrap{
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 var(--sp-6);
+}
+@media (max-width: 900px){
+  .wrap{ padding: 0 var(--sp-4); }
+}
+
+header.top{
+  border-bottom: 1px solid var(--border);
+  position: sticky; top:0; z-index: 50;
+  background: var(--bg);
+  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+}
+.top-inner{
+  display:flex; align-items:center; justify-content:space-between;
+  padding: var(--sp-4) 0;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+.brand{ display:flex; align-items:baseline; gap: var(--sp-3); }
+.brand .mark{
+  font-family: var(--font-mono);
+  font-size: 12px; letter-spacing: 0.12em;
+  border: 1px solid var(--border-strong);
+  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+}
+.brand h1{
+  font-size: 17px; font-weight: 650; margin:0; letter-spacing: -0.01em;
+}
+.brand .tag{ font-size: 12px; color: var(--text-faint); }
+
+.top-actions{ display:flex; align-items:center; gap: var(--sp-3); }
+.status-chip{
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  display:flex; align-items:center; gap:6px;
+}
+.status-dot{ width:6px; height:6px; border-radius:50%; background: var(--win); flex:none; }
+.status-dot.empty{ background: var(--text-faint); }
+
+button{
+  font-family: var(--font-sans);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--dur) var(--ease);
+}
+.btn{
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  padding: 7px 13px;
+  font-size: 12.5px;
+  font-weight: 550;
+  display:inline-flex; align-items:center; gap:6px;
+}
+.btn:hover{ border-color: var(--accent); color: var(--accent); }
+.btn.primary{ background: var(--accent); border-color: var(--accent); color:#fff; }
+.btn.primary:hover{ opacity:0.88; color:#fff; }
+.btn.ghost{ background: transparent; border-color: transparent; }
+.btn.ghost:hover{ background: var(--bg-sunken); color:var(--text); border-color: transparent; }
+.btn.sm{ padding: 4px 9px; font-size: 11.5px; }
+.icon-btn{
+  width: 32px; height:32px; display:flex; align-items:center; justify-content:center;
+  background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+}
+.icon-btn:hover{ border-color: var(--accent); }
+.icon-btn svg{ width:15px; height:15px; }
+
+/* Tabs */
+nav.tabs{
+  display:flex; gap: var(--sp-6);
+  border-bottom: 1px solid var(--border);
+}
+nav.tabs button{
+  background:none; border:none; color: var(--text-faint);
+  padding: var(--sp-3) 0; margin-bottom:-1px;
+  font-size: 13px; font-weight: 600;
+  border-bottom: 2px solid transparent;
+  display:flex; align-items:baseline; gap:7px;
+}
+nav.tabs button .n{ font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+nav.tabs button.active{ color: var(--text); border-bottom-color: var(--accent); }
+nav.tabs button.active .n{ color: var(--accent); }
+nav.tabs button:hover:not(.active){ color: var(--text-muted); }
+
+main{ padding: var(--sp-6) 0 var(--sp-8); }
+.panel{ display:none; animation: fadein var(--dur) var(--ease); }
+.panel.active{ display:block; }
+@keyframes fadein{ from{opacity:0; transform: translateY(3px);} to{opacity:1; transform:none;} }
+
+section.block{ margin-bottom: var(--sp-7); }
+.block-head{
+  display:flex; align-items:baseline; justify-content:space-between;
+  margin-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--sp-2);
+  gap: var(--sp-3); flex-wrap:wrap;
+}
+.block-head h2{
+  font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em;
+  font-weight: 700; margin:0; color: var(--text);
+  display:flex; align-items:center; gap:8px;
+}
+.block-head h2 .idx{ color: var(--accent); font-family: var(--font-mono); }
+.block-head p{ margin:0; font-size: 12px; color: var(--text-faint); max-width: 520px; text-align:right;}
+
+/* Grid utilities */
+.grid{ display:grid; gap: var(--sp-4); }
+.g-kpi{ grid-template-columns: repeat(6, 1fr); }
+.g-2{ grid-template-columns: 1fr 1fr; }
+.g-3{ grid-template-columns: 1fr 1fr 1fr; }
+.g-12-5-7{ grid-template-columns: 5fr 7fr; }
+@media (max-width: 1100px){
+  .g-kpi{ grid-template-columns: repeat(3,1fr); }
+  .g-2, .g-3, .g-12-5-7{ grid-template-columns: 1fr; }
+}
+
+/* Cards / cells */
+.cell{
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+}
+.stat{
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  padding: var(--sp-3) var(--sp-4);
+  position: relative;
+}
+.stat .l{ font-size: 10.5px; text-transform:uppercase; letter-spacing:.07em; color: var(--text-faint); font-weight:600; margin-bottom:6px; }
+.stat .v{ font-size: 22px; font-weight: 650; font-family: var(--font-mono); letter-spacing:-0.02em; }
+.stat .s{ font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+h3.sub{ font-size: 12.5px; font-weight: 700; margin: 0 0 var(--sp-3); color: var(--text); }
+p.desc{ font-size: 12px; color: var(--text-muted); margin: 0 0 var(--sp-4); line-height:1.6; }
+
+/* Tables */
+table.dt{ width:100%; border-collapse: collapse; font-size: 12.5px; }
+table.dt th{
+  text-align:left; font-weight:600; font-size: 10.5px; text-transform:uppercase; letter-spacing:.05em;
+  color: var(--text-faint); border-bottom: 1px solid var(--border-strong);
+  padding: 7px 10px; white-space:nowrap;
+  position: sticky; top:0; background: var(--bg-elevated);
+}
+table.dt td{
+  padding: 7px 10px; border-bottom: 1px solid var(--border);
+  white-space:nowrap; font-family: var(--font-mono);
+}
+table.dt td.txt{ font-family: var(--font-sans); }
+table.dt tbody tr:hover{ background: var(--bg-sunken); cursor:default; }
+table.dt tbody tr.clickable:hover{ cursor:pointer; }
+.tbl-scroll{ overflow:auto; max-height: 520px; border:1px solid var(--border); border-radius: var(--radius-md); }
+.tbl-scroll table.dt{ border:none; }
+.tbl-scroll th{ top:0; }
+
+.pill{
+  display:inline-flex; align-items:center; gap:4px;
+  padding: 2px 7px; border-radius: 3px; font-size: 10.5px; font-weight:700;
+  font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .03em;
+}
+.pill.win{ background: var(--win-soft); color: var(--win); }
+.pill.lose{ background: var(--lose-soft); color: var(--lose); }
+.pill.open{ background: var(--accent-soft); color: var(--accent); }
+
+.insight{
+  border-left: 3px solid var(--accent);
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--accent-soft);
+  font-size: 12.5px; line-height:1.6;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-bottom: var(--sp-3);
+}
+.insight b{ color:var(--accent); }
+.insight.win{ border-color: var(--win); background: var(--win-soft); }
+.insight.win b{ color: var(--win); }
+.insight.lose{ border-color: var(--lose); background: var(--lose-soft); }
+.insight.lose b{ color: var(--lose); }
+.insight.warn{ border-color: var(--warn); background: rgba(183,121,31,0.1); }
+.insight.warn b{ color: var(--warn); }
+
+/* bar mini */
+.barrow{ display:flex; align-items:center; gap: var(--sp-3); padding: 5px 0; }
+.barrow .lbl{ width: 130px; flex: none; font-size:11.5px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.barrow .track{ flex:1; height:7px; background:var(--bg-sunken); border-radius:2px; overflow:hidden; position:relative; }
+.barrow .fill{ height:100%; border-radius:2px; }
+.barrow .val{ width:52px; text-align:right; flex:none; font-family:var(--font-mono); font-size:11.5px; }
+
+/* import panel */
+.import-box{
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--sp-5);
+  background: var(--bg-elevated);
+}
+.import-box.drag{ border-color: var(--accent); background: var(--accent-soft); }
+textarea#pasteArea{
+  width:100%; min-height: 130px; resize: vertical;
+  background: var(--bg-sunken); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 11.5px; padding: var(--sp-3);
+}
+textarea#pasteArea:focus{ outline:none; border-color: var(--accent); }
+
+.modal-bg{
+  position: fixed; inset:0; background: rgba(0,0,0,0.45); z-index: 200;
+  display:none; align-items:flex-start; justify-content:center; padding: 6vh var(--sp-4);
+  overflow:auto;
+}
+.modal-bg.show{ display:flex; }
+.modal{
+  background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  max-width: 720px; width:100%; box-shadow: var(--shadow);
+}
+.modal-head{ display:flex; justify-content:space-between; align-items:center; padding: var(--sp-4) var(--sp-5); border-bottom:1px solid var(--border); }
+.modal-head h3{ margin:0; font-size:14px; }
+.modal-body{ padding: var(--sp-5); }
+.live-box{
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  background: var(--bg-sunken);
+  margin-bottom: var(--sp-4);
+}
+.live-input{
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+.live-input:focus{ outline:none; border-color: var(--accent); }
+.divider-or{
+  display:flex; align-items:center; gap:10px;
+  color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  margin: var(--sp-4) 0;
+}
+.divider-or::before, .divider-or::after{ content:""; flex:1; height:1px; background: var(--border); }
+.status-dot.live{ background: var(--accent); animation: pulse-live 1.6s var(--ease) infinite; }
+@keyframes pulse-live{ 0%,100%{ opacity:1; } 50%{ opacity:0.35; } }
+.modal-foot{ padding: var(--sp-4) var(--sp-5); border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap: var(--sp-2); }
+
+select, input[type=text]{
+  background: var(--bg-elevated); color: var(--text);
+  border:1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 6px 9px; font-size: 12px; font-family: var(--font-sans);
+}
+
+.filters{ display:flex; gap: var(--sp-3); flex-wrap:wrap; margin-bottom: var(--sp-4); align-items:center; }
+.filters .fg{ display:flex; flex-direction:column; gap:3px; }
+.filters label{ font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-faint); font-weight:600; }
+
+.empty-state{
+  text-align:center; padding: var(--sp-8) var(--sp-5);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+.empty-state h3{ font-size:16px; margin: var(--sp-3) 0 var(--sp-2); }
+.empty-state p{ color: var(--text-muted); font-size:12.5px; max-width: 460px; margin: 0 auto var(--sp-4); }
+
+.trade-card{
+  border:1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-elevated);
+  margin-bottom: var(--sp-3); overflow:hidden;
+}
+.trade-card .tc-head{
+  display:flex; justify-content:space-between; align-items:center; padding: var(--sp-3) var(--sp-4);
+  cursor:pointer; gap: var(--sp-3); flex-wrap:wrap;
+}
+.trade-card .tc-head:hover{ background: var(--bg-sunken); }
+.trade-card .tc-body{ display:none; padding: 0 var(--sp-4) var(--sp-4); border-top:1px solid var(--border); }
+.trade-card.expanded .tc-body{ display:block; }
+.tc-meta{ display:flex; gap: var(--sp-4); align-items:center; flex-wrap:wrap; }
+.tc-meta .tag{ font-size:11px; color:var(--text-muted); font-family: var(--font-mono); }
+
+.diff-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); margin-top: var(--sp-4); }
+@media (max-width:700px){ .diff-grid{ grid-template-columns:1fr; } }
+.diff-col{ border:1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-3); }
+.diff-col h4{ margin:0 0 8px; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-faint); }
+.diff-col .row{ display:flex; justify-content:space-between; padding: 3px 0; font-size:12px; border-bottom: 1px dotted var(--border); }
+.diff-col .row span:first-child{ color:var(--text-muted); }
+.diff-col .row span:last-child{ font-family: var(--font-mono); }
+
+.dchip{ font-family:var(--font-mono); font-size:11px; padding:1px 5px; border-radius:2px; }
+.dchip.up{ background: var(--win-soft); color: var(--win); }
+.dchip.down{ background: var(--lose-soft); color: var(--lose); }
+.dchip.flat{ background: var(--bg-sunken); color: var(--text-faint); }
+
+footer.appfoot{
+  border-top:1px solid var(--border); padding: var(--sp-5) 0; text-align:center;
+  color: var(--text-faint); font-size:11px;
+}
+
+/* toggle switch (theme) */
+.theme-toggle{
+  width:44px; height:26px; border-radius: 20px; border:1px solid var(--border-strong);
+  background: var(--bg-sunken); position:relative; cursor:pointer; flex:none;
+}
+.theme-toggle .knob{
+  position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%;
+  background: var(--text); transition: transform var(--dur) var(--ease);
+  display:flex; align-items:center; justify-content:center; color: var(--bg);
+}
+[data-theme="dark"] .theme-toggle .knob{ transform: translateX(18px); }
+.theme-toggle .knob svg{ width:11px; height:11px; }
+
+svg.chart text{ font-family: var(--font-mono); fill: var(--text-muted); }
+svg.chart .axis{ stroke: var(--border-strong); stroke-width:1; }
+svg.chart .grid{ stroke: var(--border); stroke-width:1; }
+
+.scroll-x{ overflow-x:auto; }
+code.k{ font-family: var(--font-mono); background: var(--bg-sunken); padding:1px 5px; border-radius:3px; font-size:11.5px; }
+</style>
+</head>
+<body data-theme="light">
+
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brand">
+      <span class="mark">OI·JRNL</span>
+      <div>
+        <h1>Ledger</h1>
+      </div>
+      <span class="tag">quant journal for open-interest zone trades</span>
+    </div>
+    <div class="top-actions">
+      <div class="status-chip" id="statusChip">
+        <span class="status-dot empty" id="statusDot"></span>
+        <span id="statusText">no data</span>
+      </div>
+      <button class="btn" id="btnImport">Import data</button>
+      <button class="btn ghost sm" id="btnExport" title="Export current dataset as CSV">Export</button>
+      <button class="btn ghost sm" id="btnClear" title="Clear all stored data">Clear</button>
+      <div class="theme-toggle" id="themeToggle" title="Toggle light / dark">
+        <div class="knob">
+          <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="4.2"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="wrap">
+    <nav class="tabs" id="tabs">
+      <button data-tab="overview" class="active"><span class="n">01</span>Overview</button>
+      <button data-tab="openexit"><span class="n">02</span>Open → Exit</button>
+      <button data-tab="zone"><span class="n">03</span>Zone Analysis</button>
+      <button data-tab="log"><span class="n">04</span>Trade Log</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ================= OVERVIEW ================= -->
+  <div class="panel active" id="panel-overview">
+    <div id="ov-empty"></div>
+    <div id="ov-content" style="display:none;">
+
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="idx">—</span> Book summary</h2>
+          <p>Aggregate performance across every closed position currently loaded.</p>
+        </div>
+        <div class="grid g-kpi" id="kpiGrid"></div>
+      </section>
+
+      <section class="block">
+        <div class="grid g-2">
+          <div>
+            <div class="block-head"><h2><span class="idx">—</span> Win rate by strategy</h2></div>
+            <div class="cell" id="stratTable"></div>
+          </div>
+          <div>
+            <div class="block-head"><h2><span class="idx">—</span> Martingale ladder</h2></div>
+            <div class="cell" id="martTable"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="idx">—</span> Sequence</h2>
+          <p>Outcome stream in trade order — run of wins/losses reveals streakiness and drawdown clusters.</p>
+        </div>
+        <div class="cell" id="sequenceChart"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="idx">—</span> Duration vs outcome</h2>
+          <p>Does holding time separate winners from losers?</p>
+        </div>
+        <div class="cell" id="durationChart"></div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ================= OPEN -> EXIT ================= -->
+  <div class="panel" id="panel-openexit">
+    <div id="oe-empty"></div>
+    <div id="oe-content" style="display:none;">
+
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="idx">01</span> What actually changes between OPEN and EXIT</h2>
+          <p>Average change per metric during the life of the trade, split by final outcome.</p>
+        </div>
+        <p class="desc">Every row below is <b>exit snapshot − open snapshot</b>, averaged separately for winning and losing trades. A metric where winners and losers diverge sharply is a candidate signal; a metric where both groups move identically is probably just market noise (the underlying moved, not your edge).</p>
+        <div class="tbl-scroll"><table class="dt" id="deltaTable"></table></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="idx">02</span> Auto-read: interpretation</h2>
+          <p>Generated directly from the deltas above — re-computes as you add trades.</p>
+        </div>
+        <div id="oeInsights"></div>
+      </section>
+
+      <section class="block">
+        <div class="grid g-2">
+          <div>
+            <div class="block-head"><h2><span class="idx">03</span> Sigma position: open vs exit</h2></div>
+            <div class="cell" id="sigmaMoveChart"></div>
+          </div>
+          <div>
+            <div class="block-head"><h2><span class="idx">04</span> OI wall migration (Δ Put/Call ratio)</h2></div>
+            <div class="cell" id="oiRatioChart"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="idx">05</span> Per-trade before / after</h2>
+          <p>Expand a trade to see the full open-vs-exit snapshot diff, including the OI ladder around ATM.</p>
+        </div>
+        <div id="tradeCards"></div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ================= ZONE ================= -->
+  <div class="panel" id="panel-zone">
+    <div id="zn-empty"></div>
+    <div id="zn-content" style="display:none;">
+
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="idx">01</span> Sigma map</h2>
+          <p>Every entry plotted by its estimated position in σ-space at OPEN, colored by result.</p>
+        </div>
+        <div class="cell" id="sigmaMapChart"></div>
+      </section>
+
+      <section class="block">
+        <div class="grid g-2">
+          <div>
+            <div class="block-head"><h2><span class="idx">02</span> Win rate by zone band</h2></div>
+            <div class="cell" id="zoneBandTable"></div>
+          </div>
+          <div>
+            <div class="block-head"><h2><span class="idx">03</span> Win rate by zone-% bucket</h2></div>
+            <div class="cell" id="zonePctTable"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="idx">04</span> Zone × Strategy</h2>
+          <p>Which strategy performs best in which sigma band. Darker green = higher win rate, darker red = lower, at equal opacity for sample size.</p>
+        </div>
+        <div class="tbl-scroll" id="zoneStratHeat"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="idx">05</span> Zone transitions (open band → exit band)</h2>
+          <p>Did the position stay in the same σ-band for the whole trade, or migrate — and does migration correlate with outcome?</p>
+        </div>
+        <div class="tbl-scroll"><table class="dt" id="zoneTransTable"></table></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="idx">06</span> Distance-from-mean edge</h2>
+          <p>Quant read: does win probability rise or fall the further price sits from μ at entry?</p>
+        </div>
+        <div id="znInsights"></div>
+        <div class="cell" id="distanceChart"></div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ================= LOG ================= -->
+  <div class="panel" id="panel-log">
+    <div id="lg-empty"></div>
+    <div id="lg-content" style="display:none;">
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="idx">—</span> Trade log</h2>
+          <p id="logCount"></p>
+        </div>
+        <div class="filters">
+          <div class="fg">
+            <label>Strategy</label>
+            <select id="fStrategy"><option value="">All</option></select>
+          </div>
+          <div class="fg">
+            <label>Result</label>
+            <select id="fResult"><option value="">All</option><option value="Win">Win</option><option value="Lose">Lose</option><option value="OPEN">Open only</option></select>
+          </div>
+          <div class="fg">
+            <label>Zone band</label>
+            <select id="fZone"><option value="">All</option></select>
+          </div>
+          <div class="fg">
+            <label>Sort</label>
+            <select id="fSort">
+              <option value="time_desc">Newest first</option>
+              <option value="time_asc">Oldest first</option>
+              <option value="move_desc">Largest move</option>
+              <option value="dur_desc">Longest duration</option>
+            </select>
+          </div>
+        </div>
+        <div class="tbl-scroll"><table class="dt" id="logTable"></table></div>
+      </section>
+    </div>
+  </div>
+
+</main>
+
+<footer class="appfoot">Ledger runs entirely in your browser — nothing leaves this page. Data persists locally until you clear it.</footer>
+
+<!-- ============ IMPORT MODAL ============ -->
+<div class="modal-bg" id="importModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Import journal data</h3>
+      <button class="icon-btn ghost" id="closeModal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="live-box" id="liveBox">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <div style="font-size:12.5px; font-weight:650;">Live Google Sheet sync</div>
+          <span class="faint mono" id="liveStatusText" style="font-size:11px;">not connected</span>
+        </div>
+        <p class="desc" style="margin:6px 0 10px;">Paste the sheet's URL. Sharing must be set to <b>Anyone with the link → Viewer</b>. Ledger will pull the current tab's data automatically and keep it refreshed.</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <input type="text" id="liveUrlInput" class="live-input" value="https://docs.google.com/spreadsheets/d/1A8wyUo6b4o-UXdvbcaxXURXnJ4R9PU9gf310Nk4NT0U/edit?gid=0#gid=0" placeholder="https://docs.google.com/spreadsheets/d/…/edit#gid=0" style="flex:1 1 260px;">
+          <select id="liveInterval" class="live-input" style="flex:0 0 auto; width:auto;">
+            <option value="15">Refresh every 15s</option>
+            <option value="30" selected>Refresh every 30s</option>
+            <option value="60">Refresh every 60s</option>
+            <option value="0">Manual refresh only</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+          <button class="btn sm primary" id="btnLiveConnect">Connect &amp; sync now</button>
+          <button class="btn sm ghost" id="btnLiveRefreshNow" style="display:none;">Refresh now</button>
+          <button class="btn sm ghost" id="btnLiveDisconnect" style="display:none;">Disconnect</button>
+        </div>
+        <div class="faint mono" id="liveError" style="font-size:11px; margin-top:8px; display:none;"></div>
+      </div>
+      <div class="divider-or"><span>or paste manually</span></div>
+      <p class="desc" style="margin-bottom:14px;">Paste rows straight from Google Sheets (include the header row), or upload a .csv export. Column order doesn't matter — headers are matched by name, and any number of ATM±N strike columns are picked up automatically, so this stays future-proof as your sheet grows.</p>
+      <div class="import-box" id="dropZone">
+        <textarea id="pasteArea" placeholder="Paste tab-separated rows here (Ctrl/Cmd+V), including the header row…"></textarea>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; gap:10px; flex-wrap:wrap;">
+          <label class="btn sm" style="cursor:pointer;">
+            Or choose .csv file
+            <input type="file" id="fileInput" accept=".csv,.tsv,.txt" style="display:none;">
+          </label>
+          <span class="faint mono" id="parsePreview" style="font-size:11px;"></span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="btnLoadSample">Load demo data</button>
+      <button class="btn" id="btnAppend">Merge / append</button>
+      <button class="btn primary" id="btnReplace">Replace all</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   0. SAMPLE / DEMO DATA  (used only when nothing is stored yet)
+   ============================================================ */
+const SAMPLE_TSV = `Future Price\tResult\tStrategy\tMartingale\tMagic #\tType\tDate\tTime\tDTE\tSD\tMean (μ)\tExpected Distance\tRecent IV\tIntraday Calls\tIntraday Puts\tOI Calls\tOI Puts\tOI IV Open\tFut Δ\tZone\tZone %\tATM-3 Call (Intra)\tATM-3 Put (Intra)\tATM-2 Call (Intra)\tATM-2 Put (Intra)\tATM-1 Call (Intra)\tATM-1 Put (Intra)\tATM Call (Intra)\tATM Put (Intra)
+4150\t\tMean Reverse\t\t12\tOPEN\t2026-07-23\t14:31:10\t0.42\t55.98\t4126\t56\t24.10%\t721\t319\t2.0k\t2.9k\t21.71%\t-44.9\t−0σ → −1σ\t34% from −0σ\t17\t48\t12\t25\t5\t42\t6\t5
+4137.5\tWin\t\t\t12\tEXIT\t2026-07-23\t14:31:10\t0.42\t55.98\t4126\t56\t24.05%\t733\t330\t2.0k\t2.9k\t21.65%\t-46.1\t−0σ → −1σ\t41% from −0σ\t17\t50\t12\t27\t5\t44\t8\t5
+4175\t\tMean Reverse\t\t13\tOPEN\t2026-07-23\t14:31:18\t0.42\t55.98\t4126\t56\t24.10%\t721\t319\t2.0k\t2.9k\t21.71%\t-44.9\t−0σ → −1σ\t34% from −0σ\t9\t16\t0\t7\t0\t4\t0\t13
+4187.5\tLose\t\t\t13\tEXIT\t2026-07-23\t14:31:19\t0.42\t55.98\t4126\t56\t24.22%\t709\t305\t2.1k\t2.8k\t21.80%\t-42.0\t−0σ → −1σ\t22% from −0σ\t9\t14\t0\t6\t0\t3\t0\t11
+4187.5\t\tFollow Squeeze\tMartingale #1\t14\tOPEN\t2026-07-23\t14:31:19\t0.42\t55.98\t4126\t56\t24.22%\t709\t305\t2.1k\t2.8k\t21.80%\t-42.0\t−0σ → −1σ\t22% from −0σ\t0\t6\t0\t2\t0\t4\t0\t3
+4200\tWin\t\t\t14\tEXIT\t2026-07-23\t14:31:20\t0.42\t55.98\t4126\t56\t24.30%\t698\t298\t2.1k\t2.8k\t21.90%\t-39.4\t−0σ → −1σ\t15% from −0σ\t0\t6\t0\t2\t0\t4\t0\t2
+4200\t\tMean Reverse\t\t15\tOPEN\t2026-07-23\t14:31:20\t0.42\t55.98\t4126\t56\t24.30%\t698\t298\t2.1k\t2.8k\t21.90%\t-39.4\t−0σ → −1σ\t15% from −0σ\t0\t6\t0\t2\t0\t4\t0\t2
+4225\tLose\t\t\t15\tEXIT\t2026-07-23\t14:31:21\t0.42\t55.98\t4126\t56\t24.38%\t690\t289\t2.2k\t2.7k\t21.95%\t-33.8\t+0σ → −0σ\t9% from +0σ\t0\t5\t0\t2\t0\t3\t0\t1
+4225\t\tMean Reverse\tMartingale #1\t16\tOPEN\t2026-07-23\t14:31:21\t0.42\t55.98\t4126\t56\t24.38%\t690\t289\t2.2k\t2.7k\t21.95%\t-33.8\t+0σ → −0σ\t9% from +0σ\t0\t5\t0\t2\t0\t3\t0\t1
+4250\tLose\t\t\t16\tEXIT\t2026-07-23\t14:31:21\t0.42\t55.98\t4126\t56\t24.50%\t682\t281\t2.3k\t2.6k\t22.05%\t-28.6\t+0σ → −0σ\t19% from +0σ\t0\t5\t0\t2\t0\t3\t0\t0
+4250\t\tMean Reverse\tMartingale #2\t17\tOPEN\t2026-07-23\t14:31:22\t0.42\t55.98\t4126\t56\t24.50%\t682\t281\t2.3k\t2.6k\t22.05%\t-28.6\t+0σ → −0σ\t19% from +0σ\t0\t5\t0\t2\t0\t3\t0\t0
+4275\tLose\t\t\t17\tEXIT\t2026-07-23\t14:31:22\t0.42\t55.98\t4126\t56\t24.60%\t675\t272\t2.3k\t2.5k\t22.15%\t-24.1\t+0σ → +1σ\t28% from +0σ\t0\t4\t0\t2\t0\t3\t0\t0
+4275\t\tMean Reverse\tMartingale #3\t18\tOPEN\t2026-07-23\t14:31:23\t0.42\t55.98\t4126\t56\t24.60%\t675\t272\t2.3k\t2.5k\t22.15%\t-24.1\t+0σ → +1σ\t28% from +0σ\t0\t4\t0\t2\t0\t3\t0\t0
+4300\tLose\t\t\t18\tEXIT\t2026-07-23\t14:31:23\t0.42\t55.98\t4126\t56\t24.70%\t668\t264\t2.4k\t2.4k\t22.30%\t-18.9\t+0σ → +1σ\t44% from +0σ\t0\t4\t0\t1\t0\t2\t0\t0
+4200\t\tAfter Squeeze\t\t20\tOPEN\t2026-07-23\t14:31:25\t0.42\t55.98\t4126\t56\t24.10%\t721\t319\t2.0k\t2.9k\t21.71%\t-44.9\t−0σ → −1σ\t34% from −0σ\t17\t48\t12\t25\t5\t42\t6\t5
+4225\tWin\t\t\t20\tEXIT\t2026-07-23\t14:31:25\t0.42\t55.98\t4126\t56\t24.02%\t726\t312\t2.0k\t2.9k\t21.60%\t-43.0\t−0σ → −1σ\t28% from −0σ\t17\t46\t12\t23\t5\t40\t7\t4
+4100\t\tRecovery\t\t21\tOPEN\t2026-07-23\t14:31:26\t0.42\t55.98\t4126\t56\t23.90%\t730\t340\t1.9k\t3.0k\t21.50%\t-48.2\t−1σ → −2σ\t12% from −1σ\t20\t55\t14\t30\t6\t46\t7\t6
+4225\tWin\t\t\t21\tEXIT\t2026-07-23\t14:31:26\t0.42\t55.98\t4126\t56\t23.70%\t742\t325\t1.9k\t3.0k\t21.30%\t-40.5\t−1σ → −2σ\t55% from −1σ\t20\t50\t14\t28\t6\t44\t9\t5`;
+
+/* ============================================================
+   1. HEADER MATCHING + PARSING
+   ============================================================ */
+const FIELD_TESTS = [
+  ['price',      h => /^future\s*price$/i.test(h)],
+  ['result',     h => /^result$/i.test(h)],
+  ['strategy',   h => /^strategy$/i.test(h)],
+  ['martingale', h => /^martingale$/i.test(h)],
+  ['magic',      h => /^magic\s*#?$/i.test(h)],
+  ['type',       h => /^type$/i.test(h)],
+  ['date',       h => /^date$/i.test(h)],
+  ['time',       h => /^time$/i.test(h)],
+  ['dte',        h => /^dte$/i.test(h)],
+  ['sd',         h => /^sd$/i.test(h)],
+  ['mean',       h => /^mean/i.test(h)],
+  ['expDist',    h => /^expected\s*distance$/i.test(h)],
+  ['iv',         h => /^recent\s*iv$/i.test(h)],
+  ['intraCalls', h => /^intraday\s*calls$/i.test(h)],
+  ['intraPuts',  h => /^intraday\s*puts$/i.test(h)],
+  ['oiCalls',    h => /^oi\s*calls$/i.test(h)],
+  ['oiPuts',     h => /^oi\s*puts$/i.test(h)],
+  ['oiIvOpen',   h => /^oi\s*iv\s*open$/i.test(h)],
+  ['futDelta',   h => /^fut/i.test(h)],
+  ['zonePct',    h => /^zone\s*%$/i.test(h)],
+  ['zone',       h => /^zone$/i.test(h)],
+];
+const LADDER_RE = /^ATM\s*([+-]?\d+)?\s*(Call|Put)\s*\(Intra\)$/i;
+
+function detectDelimiter(line){
+  const tabs = (line.match(/\t/g)||[]).length;
+  const commas = (line.match(/,/g)||[]).length;
+  return tabs >= commas ? '\t' : ',';
+}
+function splitCSVLine(line, delim){
+  if(delim === '\t') return line.split('\t');
+  // basic quoted-CSV split
+  const out = []; let cur=''; let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c = line[i];
+    if(c === '"'){
+      if(inQ && line[i+1] === '"'){ cur+='"'; i++; }
+      else inQ = !inQ;
+    } else if(c === delim && !inQ){ out.push(cur); cur=''; }
+    else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+function num(v){
+  if(v === undefined || v === null) return null;
+  let s = String(v).trim();
+  if(s === '') return null;
+  s = s.replace(/−/g,'-').replace(/,/g,'');
+  let mult = 1;
+  if(/k$/i.test(s)){ mult = 1000; s = s.slice(0,-1); }
+  else if(/m$/i.test(s)){ mult = 1000000; s = s.slice(0,-1); }
+  if(/%$/.test(s)){ s = s.slice(0,-1); const f = parseFloat(s); return isNaN(f)?null:f; }
+  const f = parseFloat(s);
+  return isNaN(f) ? null : f*mult;
+}
+function parseZoneStr(str){
+  if(!str) return {raw:'', from:null, to:null};
+  const s = String(str).replace(/−/g,'-').trim();
+  const m = s.match(/(-?\d*\.?\d*)\s*σ\s*(?:→|->|-{1,2}>|~|to)\s*(-?\d*\.?\d*)\s*σ/i);
+  if(!m) return {raw:str, from:null, to:null};
+  return {raw:str, from: parseFloat(m[1]===''||m[1]==='-'?'0':m[1]), to: parseFloat(m[2]===''||m[2]==='-'?'0':m[2])};
+}
+function parseZonePctStr(str){
+  if(!str) return {raw:'', pct:null, ref:null};
+  const s = String(str).replace(/−/g,'-');
+  const m = s.match(/(-?\d*\.?\d*)\s*%/);
+  const m2 = s.match(/from\s*(-?\d*\.?\d*)\s*σ/i);
+  return {raw:str, pct: m?parseFloat(m[1]):null, ref: m2?parseFloat(m2[1]===''||m2[1]==='-'?'0':m2[1]):null};
+}
+
+function parseRawText(text){
+  const lines = text.replace(/\r/g,'').split('\n').filter(l => l.trim() !== '');
+  if(lines.length < 2) return {rows:[], count:0};
+  const delim = detectDelimiter(lines[0]);
+  const headers = splitCSVLine(lines[0], delim).map(h => h.trim());
+  const colMap = {};
+  const ladderCols = []; // {idx, offset, side}
+  headers.forEach((h, idx) => {
+    let matched = false;
+    for(const [key, test] of FIELD_TESTS){
+      if(colMap[key] === undefined && test(h)){ colMap[key] = idx; matched = true; break; }
+    }
+    if(!matched){
+      const lm = h.match(LADDER_RE);
+      if(lm){
+        const offset = lm[1] ? parseInt(lm[1],10) : 0;
+        const side = lm[2].toLowerCase();
+        ladderCols.push({idx, offset, side});
+      }
+    }
+  });
+
+  const rows = [];
+  for(let i=1;i<lines.length;i++){
+    const cells = splitCSVLine(lines[i], delim);
+    if(cells.every(c => c.trim()==='')) continue;
+    const get = k => colMap[k]!==undefined ? cells[colMap[k]] : undefined;
+    const typeRaw = (get('type')||'').trim().toUpperCase();
+    if(typeRaw !== 'OPEN' && typeRaw !== 'EXIT') continue; // skip malformed / blank rows
+    const zone = parseZoneStr(get('zone'));
+    const zonePct = parseZonePctStr(get('zonePct'));
+    const ladder = {};
+    ladderCols.forEach(lc => {
+      const v = num(cells[lc.idx]);
+      if(v === null) return;
+      if(!ladder[lc.offset]) ladder[lc.offset] = {call:null, put:null};
+      ladder[lc.offset][lc.side] = v;
+    });
+    rows.push({
+      price: num(get('price')),
+      result: (get('result')||'').trim(),
+      strategy: (get('strategy')||'').trim(),
+      martingale: (get('martingale')||'').trim(),
+      magic: (get('magic')||'').trim(),
+      type: typeRaw,
+      date: (get('date')||'').trim(),
+      time: (get('time')||'').trim(),
+      dte: num(get('dte')),
+      sd: num(get('sd')),
+      mean: num(get('mean')),
+      expDist: num(get('expDist')),
+      iv: num(get('iv')),
+      intraCalls: num(get('intraCalls')),
+      intraPuts: num(get('intraPuts')),
+      oiCalls: num(get('oiCalls')),
+      oiPuts: num(get('oiPuts')),
+      oiIvOpen: num(get('oiIvOpen')),
+      futDelta: num(get('futDelta')),
+      zoneFrom: zone.from, zoneTo: zone.to, zoneRaw: zone.raw,
+      zonePct: zonePct.pct, zonePctRef: zonePct.ref,
+      ladder,
+      _rowIndex: i,
+    });
+  }
+  return {rows, count: rows.length};
+}
+
+/* ============================================================
+   2. TRADE ASSEMBLY (pair OPEN/EXIT by Magic#, in row order)
+   ============================================================ */
+function sigmaPos(row){
+  if(row.zoneFrom === null || row.zoneTo === null || row.zonePct === null) return null;
+  return row.zoneFrom + (row.zonePct/100) * (row.zoneTo - row.zoneFrom);
+}
+function ladderSums(ladder){
+  let call=0, put=0, n=0;
+  let maxCall = {offset:null, v:-Infinity}, maxPut = {offset:null, v:-Infinity};
+  Object.keys(ladder).forEach(k=>{
+    const off = parseInt(k,10);
+    const e = ladder[k];
+    if(e.call!==null && e.call!==undefined){ call += e.call; n++; if(e.call > maxCall.v){ maxCall = {offset:off, v:e.call}; } }
+    if(e.put!==null && e.put!==undefined){ put += e.put; n++; if(e.put > maxPut.v){ maxPut = {offset:off, v:e.put}; } }
+  });
+  return {callSum:call, putSum:put, ratio: call>0 ? put/call : null, maxCall: maxCall.offset!==null?maxCall:null, maxPut: maxPut.offset!==null?maxPut:null, hasData:n>0};
+}
+
+function buildTrades(rows){
+  const openMap = {};
+  const trades = [];
+  rows.forEach(r => {
+    if(r.type === 'OPEN'){
+      openMap[r.magic] = r; // last OPEN with this magic wins if dup
+    } else if(r.type === 'EXIT'){
+      const o = openMap[r.magic];
+      if(!o){ return; } // exit without matching open -> ignore
+      const oPos = sigmaPos(o), ePos = sigmaPos(r);
+      const oL = ladderSums(o.ladder), eL = ladderSums(r.ladder);
+      let durSec = null;
+      try{
+        const t1 = new Date(o.date+'T'+(o.time||'00:00:00'));
+        const t2 = new Date(r.date+'T'+(r.time||'00:00:00'));
+        if(!isNaN(t1) && !isNaN(t2)) durSec = (t2-t1)/1000;
+      }catch(e){}
+      const result = (r.result || o.result || '').trim();
+      trades.push({
+        magic: r.magic,
+        strategy: o.strategy || r.strategy || '(unlabeled)',
+        martingale: o.martingale || r.martingale || '',
+        result: /win/i.test(result) ? 'Win' : /lose|loss/i.test(result) ? 'Lose' : '',
+        open: o, exit: r,
+        openSigma: oPos, exitSigma: ePos,
+        deltaSigma: (oPos!==null && ePos!==null) ? ePos-oPos : null,
+        openLadder: oL, exitLadder: eL,
+        priceMove: (o.price!==null && r.price!==null) ? r.price - o.price : null,
+        durSec,
+        dIV: numDelta(o.iv,r.iv), dOiCalls: numDelta(o.oiCalls,r.oiCalls), dOiPuts: numDelta(o.oiPuts,r.oiPuts),
+        dOiIvOpen: numDelta(o.oiIvOpen,r.oiIvOpen), dFutDelta: numDelta(o.futDelta,r.futDelta),
+        dIntraCalls: numDelta(o.intraCalls,r.intraCalls), dIntraPuts: numDelta(o.intraPuts,r.intraPuts),
+        dZonePct: numDelta(o.zonePct,r.zonePct),
+        dLadderRatio: numDelta(oL.ratio, eL.ratio),
+        openZoneLabel: o.zoneRaw, exitZoneLabel: r.zoneRaw,
+        zoneChanged: o.zoneRaw !== r.zoneRaw,
+        magicIdx: o._rowIndex,
+      });
+      delete openMap[r.magic];
+    }
+  });
+  // any leftover opens = still-open positions
+  const openOnly = Object.values(openMap).map(o => ({
+    magic:o.magic, strategy:o.strategy||'(unlabeled)', martingale:o.martingale||'',
+    result:'OPEN', open:o, exit:null, openSigma:sigmaPos(o), exitSigma:null,
+    openLadder: ladderSums(o.ladder), exitLadder:null,
+    priceMove:null, durSec:null, openZoneLabel:o.zoneRaw, exitZoneLabel:null,
+    magicIdx:o._rowIndex,
+  }));
+  trades.sort((a,b)=>a.magicIdx-b.magicIdx);
+  openOnly.sort((a,b)=>a.magicIdx-b.magicIdx);
+  return {closed: trades, openOnly};
+}
+function numDelta(a,b){ return (a!==null && a!==undefined && b!==null && b!==undefined) ? b-a : null; }
+
+/* ============================================================
+   3. STATE / PERSISTENCE
+   ============================================================ */
+const STORE_KEY = 'ledger_journal_rows_v1';
+const THEME_KEY = 'ledger_theme_v1';
+let STATE = { rows: [], closed: [], openOnly: [], isDemo:false };
+
+function rowKey(r){ return [r.magic, r.type, r.date, r.time, r.price].join('|'); }
+
+function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(STATE.rows)); }
+function load(){
+  const raw = localStorage.getItem(STORE_KEY);
+  if(raw){
+    try{ STATE.rows = JSON.parse(raw); STATE.isDemo=false; return true; }catch(e){}
+  }
+  return false;
+}
+function recompute(){
+  const built = buildTrades(STATE.rows);
+  STATE.closed = built.closed;
+  STATE.openOnly = built.openOnly;
+}
+function ingest(text, mode){
+  const parsed = parseRawText(text);
+  if(parsed.rows.length === 0){ alert('No valid OPEN/EXIT rows found. Make sure the header row is included.'); return false; }
+  if(mode === 'replace'){
+    STATE.rows = parsed.rows;
+  } else {
+    const seen = new Set(STATE.rows.map(rowKey));
+    const merged = STATE.rows.slice();
+    let added = 0;
+    parsed.rows.forEach(r => { const k = rowKey(r); if(!seen.has(k)){ merged.push(r); seen.add(k); added++; } });
+    STATE.rows = merged;
+  }
+  STATE.isDemo = false;
+  STATE.rows.sort((a,b)=>0); // keep insertion order; rely on _rowIndex per import batch — reindex below
+  STATE.rows.forEach((r,i)=> r._rowIndex = i);
+  save();
+  recompute();
+  return true;
+}
+
+/* ============================================================
+   3b. LIVE GOOGLE SHEET SYNC
+   ============================================================ */
+const LIVE_KEY = 'ledger_live_sheet_v1';
+let LIVE = { url:'', id:'', gid:'', intervalSec:30, enabled:false, lastSync:null };
+let liveTimer = null;
+
+function loadLiveConfig(){
+  try{
+    const raw = localStorage.getItem(LIVE_KEY);
+    if(raw){ const parsed = JSON.parse(raw); LIVE = Object.assign(LIVE, parsed); return true; }
+  }catch(e){}
+  return false;
+}
+function saveLiveConfig(){ localStorage.setItem(LIVE_KEY, JSON.stringify(LIVE)); }
+function clearLiveConfig(){ localStorage.removeItem(LIVE_KEY); LIVE = { url:'', id:'', gid:'', intervalSec:30, enabled:false, lastSync:null }; }
+
+function extractSheetInfo(url){
+  const idMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if(!idMatch) return null;
+  const gidMatch = url.match(/[#?&]gid=(\d+)/);
+  return { id: idMatch[1], gid: gidMatch ? gidMatch[1] : '0' };
+}
+function sheetCsvUrl(id, gid){
+  return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&gid=${encodeURIComponent(gid)}&_=${Date.now()}`;
+}
+
+function showLiveError(msg){
+  const el = document.getElementById('liveError');
+  if(!msg){ el.style.display='none'; el.textContent=''; return; }
+  el.style.display='block';
+  el.textContent = msg;
+}
+function setLiveStatusText(txt){
+  const el = document.getElementById('liveStatusText');
+  if(el) el.textContent = txt;
+}
+function updateLiveUI(){
+  const connected = !!LIVE.enabled;
+  document.getElementById('btnLiveRefreshNow').style.display = connected ? '' : 'none';
+  document.getElementById('btnLiveDisconnect').style.display = connected ? '' : 'none';
+  document.getElementById('btnLiveConnect').textContent = connected ? 'Reconnect' : 'Connect & sync now';
+  if(connected){
+    document.getElementById('liveUrlInput').value = LIVE.url;
+    document.getElementById('liveInterval').value = String(LIVE.intervalSec);
+    const ago = LIVE.lastSync ? Math.max(0, Math.round((Date.now()-LIVE.lastSync)/1000)) : null;
+    setLiveStatusText(ago===null ? 'connected — syncing…' : `live · synced ${ago<5?'just now':ago+'s ago'}`);
+  } else {
+    setLiveStatusText('not connected');
+  }
+  updateStatusChip();
+}
+
+async function fetchAndIngestSheet(showAlertOnEmpty){
+  if(!LIVE.id) return false;
+  try{
+    const res = await fetch(sheetCsvUrl(LIVE.id, LIVE.gid), { cache: 'no-store' });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    if(/^<!DOCTYPE html/i.test(text.trim()) || /accounts\.google\.com/i.test(text)){
+      throw new Error('Sheet is not public. Set sharing to "Anyone with the link → Viewer".');
+    }
+    const parsed = parseRawText(text);
+    if(parsed.rows.length === 0){
+      if(showAlertOnEmpty) showLiveError('Connected, but no valid OPEN/EXIT rows were found in this tab. Check the header row matches expected columns.');
+      return false;
+    }
+    STATE.rows = parsed.rows;
+    STATE.rows.forEach((r,i)=> r._rowIndex = i);
+    STATE.isDemo = false;
+    save();
+    recompute();
+    LIVE.lastSync = Date.now();
+    saveLiveConfig();
+    showLiveError(null);
+    updateLiveUI();
+    renderAll();
+    return true;
+  }catch(err){
+    showLiveError('Sync failed: ' + (err && err.message ? err.message : 'could not fetch the sheet.'));
+    updateLiveUI();
+    return false;
+  }
+}
+
+function startAutoSync(){
+  if(liveTimer) clearInterval(liveTimer);
+  liveTimer = null;
+  if(LIVE.intervalSec > 0){
+    liveTimer = setInterval(()=> fetchAndIngestSheet(false), LIVE.intervalSec*1000);
+  }
+}
+function stopAutoSync(){
+  if(liveTimer) clearInterval(liveTimer);
+  liveTimer = null;
+}
+
+function connectLiveSheet(){
+  const url = document.getElementById('liveUrlInput').value.trim();
+  const intervalSec = parseInt(document.getElementById('liveInterval').value, 10);
+  if(!url){ showLiveError('Paste a Google Sheets URL first.'); return; }
+  const info = extractSheetInfo(url);
+  if(!info){ showLiveError("Couldn't find a sheet ID in that URL."); return; }
+  showLiveError(null);
+  LIVE.url = url; LIVE.id = info.id; LIVE.gid = info.gid; LIVE.intervalSec = intervalSec; LIVE.enabled = true;
+  saveLiveConfig();
+  setLiveStatusText('connecting…');
+  fetchAndIngestSheet(true).then(ok=>{
+    startAutoSync();
+    updateLiveUI();
+    if(ok){ document.getElementById('importModal').classList.remove('show'); }
+  });
+}
+function disconnectLiveSheet(){
+  stopAutoSync();
+  clearLiveConfig();
+  updateLiveUI();
+}
+
+/* ============================================================
+   4. SMALL SVG CHART HELPERS
+   ============================================================ */
+function svgEl(w,h,extra){ return `<svg class="chart" viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="xMidYMid meet" ${extra||''}>`; }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function barChartH(items, opts){
+  // items: [{label, value, color, sub}]
+  opts = opts||{};
+  const max = opts.max || Math.max(1, ...items.map(i=>Math.abs(i.value)));
+  let html = '';
+  items.forEach(it=>{
+    const pct = Math.min(100, Math.abs(it.value)/max*100);
+    html += `<div class="barrow">
+      <div class="lbl" title="${esc(it.label)}">${esc(it.label)}</div>
+      <div class="track"><div class="fill" style="width:${pct}%; background:${it.color||'var(--accent)'};"></div></div>
+      <div class="val">${it.display!==undefined?it.display:it.value}</div>
+    </div>`;
+  });
+  return html;
+}
+
+function lineDots(points, opts){
+  // points: [{x(0-1 or raw), y(win=1/lose=0), color, label}]
+  opts = opts || {};
+  const W = opts.w||900, H = opts.h||160, pad=32;
+  const xs = points.map(p=>p.x);
+  const minX = opts.minX!==undefined?opts.minX:Math.min(...xs), maxX = opts.maxX!==undefined?opts.maxX:Math.max(...xs);
+  const rangeX = (maxX-minX)||1;
+  let html = svgEl(W,H);
+  html += `<line class="axis" x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}"/>`;
+  html += `<line class="axis" x1="${pad}" y1="${pad}" x2="${pad}" y2="${H-pad}"/>`;
+  // zero line
+  if(minX < 0 && maxX > 0){
+    const zx = pad + (0-minX)/rangeX*(W-2*pad);
+    html += `<line class="grid" x1="${zx}" y1="${pad}" x2="${zx}" y2="${H-pad}" stroke-dasharray="2,3"/>`;
+    html += `<text x="${zx}" y="${H-pad+14}" font-size="9" text-anchor="middle">μ</text>`;
+  }
+  html += `<text x="${pad}" y="${H-pad+14}" font-size="9">${minX.toFixed(1)}σ</text>`;
+  html += `<text x="${W-pad}" y="${H-pad+14}" font-size="9" text-anchor="end">${maxX.toFixed(1)}σ</text>`;
+  points.forEach((p,i)=>{
+    const cx = pad + (p.x-minX)/rangeX*(W-2*pad);
+    const cy = p.win ? pad+18 : H-pad-18;
+    html += `<circle cx="${cx.toFixed(1)}" cy="${cy}" r="4.2" fill="${p.color}" fill-opacity="0.85"><title>${esc(p.label)}</title></circle>`;
+  });
+  html += `<text x="${pad}" y="${pad+4}" font-size="9" fill="var(--win)">WIN</text>`;
+  html += `<text x="${pad}" y="${H-pad-24}" font-size="9" fill="var(--lose)">LOSE</text>`;
+  html += `</svg>`;
+  return html;
+}
+
+function scatterSigma(points, opts){
+  opts = opts||{};
+  const W = opts.w||1100, H = opts.h||220, pad=40;
+  const xs = points.map(p=>p.x);
+  let minX = Math.min(-1, Math.min(...xs)-0.3), maxX = Math.max(1, Math.max(...xs)+0.3);
+  const rangeX = (maxX-minX)||1;
+  let html = svgEl(W,H);
+  // grid at integer sigma
+  for(let s=Math.ceil(minX); s<=Math.floor(maxX); s++){
+    const gx = pad + (s-minX)/rangeX*(W-2*pad);
+    html += `<line class="grid" x1="${gx}" y1="${pad}" x2="${gx}" y2="${H-pad}" ${s===0?'stroke-dasharray="0"':'stroke-dasharray="2,3"'}/>`;
+    html += `<text x="${gx}" y="${H-pad+16}" font-size="9" text-anchor="middle">${s>0?'+':''}${s}σ</text>`;
+  }
+  html += `<line class="axis" x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}"/>`;
+  // jitter y to avoid overlap: bucket by rounded x
+  const buckets = {};
+  points.forEach(p=>{
+    const key = Math.round(p.x*20);
+    buckets[key] = buckets[key]||0;
+    const row = buckets[key]++;
+    const cx = pad + (p.x-minX)/rangeX*(W-2*pad);
+    const cy = H-pad-30-(row*13);
+    html += `<circle cx="${cx.toFixed(1)}" cy="${Math.max(pad+6,cy)}" r="5" fill="${p.color}" fill-opacity="0.88" stroke="var(--bg-elevated)" stroke-width="1"><title>${esc(p.label)}</title></circle>`;
+  });
+  html += `</svg>`;
+  return html;
+}
+
+function durationBars(closed){
+  const wins = closed.filter(t=>t.result==='Win' && t.durSec!==null).map(t=>t.durSec);
+  const loses = closed.filter(t=>t.result==='Lose' && t.durSec!==null).map(t=>t.durSec);
+  const avg = a => a.length? a.reduce((x,y)=>x+y,0)/a.length : null;
+  const aw = avg(wins), al = avg(loses);
+  if(aw===null && al===null) return '<p class="faint">No duration data (Date/Time missing or identical for open & exit).</p>';
+  const max = Math.max(aw||0, al||0, 1);
+  return barChartH([
+    {label:'Avg duration — Wins', value: aw||0, display: aw!==null? fmtDur(aw):'—', color:'var(--win)'},
+    {label:'Avg duration — Losses', value: al||0, display: al!==null? fmtDur(al):'—', color:'var(--lose)'},
+  ], {max});
+}
+function fmtDur(s){
+  if(s===null||s===undefined) return '—';
+  if(Math.abs(s) < 60) return s.toFixed(1)+'s';
+  if(Math.abs(s) < 3600) return (s/60).toFixed(1)+'m';
+  return (s/3600).toFixed(1)+'h';
+}
+
+/* ============================================================
+   5. STAT HELPERS
+   ============================================================ */
+function mean(arr){ const a = arr.filter(v=>v!==null && v!==undefined && !isNaN(v)); return a.length? a.reduce((x,y)=>x+y,0)/a.length : null; }
+function pearson(xs, ys){
+  const n = xs.length;
+  if(n<3) return null;
+  const mx = mean(xs), my = mean(ys);
+  let num=0, dx=0, dy=0;
+  for(let i=0;i<n;i++){ const a=xs[i]-mx, b=ys[i]-my; num+=a*b; dx+=a*a; dy+=b*b; }
+  if(dx===0||dy===0) return null;
+  return num/Math.sqrt(dx*dy);
+}
+function fmtNum(v, d){ if(v===null||v===undefined||isNaN(v)) return '—'; d = d===undefined?2:d; return v.toFixed(d); }
+function fmtSigned(v,d){ if(v===null||v===undefined||isNaN(v)) return '—'; d=d===undefined?2:d; return (v>0?'+':'')+v.toFixed(d); }
+function pctStr(v,d){ if(v===null||v===undefined||isNaN(v)) return '—'; d=d===undefined?1:d; return v.toFixed(d)+'%'; }
+function dchip(v, unit, invert){
+  if(v===null||v===undefined||isNaN(v)) return '<span class="dchip flat">n/a</span>';
+  const up = invert ? v<0 : v>0;
+  const cls = Math.abs(v) < 1e-9 ? 'flat' : (up?'up':'down');
+  return `<span class="dchip ${cls}">${v>0?'+':''}${v.toFixed(2)}${unit||''}</span>`;
+}
+
+/* ============================================================
+   6. RENDER: OVERVIEW
+   ============================================================ */
+function renderOverview(){
+  const closed = STATE.closed;
+  const has = closed.length > 0;
+  document.getElementById('ov-empty').innerHTML = has? '' : emptyStateHTML();
+  document.getElementById('ov-content').style.display = has? '' : 'none';
+  if(!has) return;
+
+  const wins = closed.filter(t=>t.result==='Win');
+  const loses = closed.filter(t=>t.result==='Lose');
+  const decided = wins.length+loses.length;
+  const winRate = decided? wins.length/decided*100 : null;
+
+  // streak
+  let streak=0, streakType='';
+  for(let i=closed.length-1;i>=0;i--){
+    const r = closed[i].result;
+    if(r!=='Win' && r!=='Lose') continue;
+    if(streak===0){ streakType=r; streak=1; }
+    else if(r===streakType) streak++;
+    else break;
+  }
+  // best strategy by win rate (min 2 trades)
+  const byStrat = groupBy(closed, t=>t.strategy);
+  let bestStrat = null, bestWR = -1;
+  Object.entries(byStrat).forEach(([k,arr])=>{
+    const w = arr.filter(t=>t.result==='Win').length, l = arr.filter(t=>t.result==='Lose').length;
+    if(w+l>=2){ const wr=w/(w+l)*100; if(wr>bestWR){ bestWR=wr; bestStrat=k; } }
+  });
+  const avgMoveWin = mean(wins.map(t=>Math.abs(t.priceMove)));
+  const avgMoveLose = mean(loses.map(t=>Math.abs(t.priceMove)));
+
+  const kpis = [
+    {l:'Total trades', v: closed.length + STATE.openOnly.length, s: STATE.openOnly.length? STATE.openOnly.length+' still open':'all closed'},
+    {l:'Closed', v: decided, s: wins.length+'W / '+loses.length+'L'},
+    {l:'Win rate', v: winRate!==null? winRate.toFixed(1)+'%':'—', s: decided+' decided', cls: winRate!==null && winRate>=50?'win-c':'lose-c'},
+    {l:'Current streak', v: (streak||'—')+(streakType?(' '+ (streakType==='Win'?'W':'L')):''), s: streakType==='Win'?'winning':streakType==='Lose'?'losing':'—', cls: streakType==='Win'?'win-c':streakType==='Lose'?'lose-c':''},
+    {l:'Best strategy', v: bestStrat||'—', s: bestStrat? bestWR.toFixed(0)+'% win rate':'insufficient n', small:true},
+    {l:'Avg |move| win vs lose', v: (avgMoveWin!==null?avgMoveWin.toFixed(1):'—')+' / '+(avgMoveLose!==null?avgMoveLose.toFixed(1):'—'), s:'price points'},
+  ];
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k=>`
+    <div class="stat">
+      <div class="l">${k.l}</div>
+      <div class="v ${k.cls||''}" style="${k.small?'font-size:16px;':''}">${k.v}</div>
+      <div class="s">${k.s}</div>
+    </div>`).join('');
+
+  // strategy table
+  const stratRows = Object.entries(byStrat).map(([k,arr])=>{
+    const w = arr.filter(t=>t.result==='Win').length, l = arr.filter(t=>t.result==='Lose').length;
+    const wr = (w+l)? w/(w+l)*100 : null;
+    return {label:k, n:arr.length, w,l,wr};
+  }).sort((a,b)=>b.n-a.n);
+  document.getElementById('stratTable').innerHTML = `
+    <table class="dt"><thead><tr><th>Strategy</th><th>N</th><th>W</th><th>L</th><th>Win%</th></tr></thead>
+    <tbody>${stratRows.map(r=>`<tr><td class="txt">${esc(r.label)}</td><td>${r.n}</td><td class="win-c">${r.w}</td><td class="lose-c">${r.l}</td><td>${r.wr!==null?r.wr.toFixed(0)+'%':'—'}</td></tr>`).join('')}</tbody></table>`;
+
+  // martingale table
+  const byMart = groupBy(closed, t=>t.martingale || 'None');
+  const martRows = Object.entries(byMart).map(([k,arr])=>{
+    const w = arr.filter(t=>t.result==='Win').length, l = arr.filter(t=>t.result==='Lose').length;
+    const wr = (w+l)? w/(w+l)*100 : null;
+    return {label:k, n:arr.length, w,l,wr};
+  }).sort((a,b)=> a.label==='None'? -1 : b.label==='None'? 1 : a.label.localeCompare(b.label));
+  document.getElementById('martTable').innerHTML = `
+    <table class="dt"><thead><tr><th>Level</th><th>N</th><th>W</th><th>L</th><th>Win%</th></tr></thead>
+    <tbody>${martRows.map(r=>`<tr><td class="txt">${esc(r.label)}</td><td>${r.n}</td><td class="win-c">${r.w}</td><td class="lose-c">${r.l}</td><td>${r.wr!==null?r.wr.toFixed(0)+'%':'—'}</td></tr>`).join('')}</tbody></table>
+    ${martRows.length>1 && martRows[0].wr!==null && martRows[martRows.length-1].wr!==null && martRows[martRows.length-1].wr < martRows[0].wr - 15 ?
+      '<div class="insight warn" style="margin-top:10px;"><b>Watch:</b> win rate declines as martingale level increases — deeper legs are digging a bigger hole, not recovering it.</div>' : ''}`;
+
+  // sequence chart
+  document.getElementById('sequenceChart').innerHTML = sequenceChartHTML(closed);
+
+  // duration chart
+  document.getElementById('durationChart').innerHTML = durationBars(closed);
+}
+function groupBy(arr, fn){
+  const o = {};
+  arr.forEach(x=>{ const k = fn(x)||'—'; (o[k]=o[k]||[]).push(x); });
+  return o;
+}
+function sequenceChartHTML(closed){
+  const seq = closed.filter(t=>t.result==='Win'||t.result==='Lose');
+  if(!seq.length) return '<p class="faint">No decided trades yet.</p>';
+  const W = Math.max(600, seq.length*22+40), H=90, pad=20;
+  let html = svgEl(W,H,'preserveAspectRatio="xMinYMid meet"');
+  let cum=0; const pts=[];
+  seq.forEach((t,i)=>{ cum += t.result==='Win'?1:-1; pts.push(cum); });
+  const maxAbs = Math.max(1,...pts.map(Math.abs));
+  html += `<line class="axis" x1="${pad}" y1="${H/2}" x2="${W-pad}" y2="${H/2}"/>`;
+  seq.forEach((t,i)=>{
+    const x = pad + i*22 + 11;
+    const win = t.result==='Win';
+    const barH = 28;
+    const y = win ? (H/2 - 2 - barH) : (H/2 + 2);
+    html += `<rect x="${x-6}" y="${y}" width="12" height="${barH}" rx="2" fill="${win?'var(--win)':'var(--lose)'}" fill-opacity="0.85"><title>#${esc(t.magic)} ${esc(t.strategy)} — ${t.result}</title></rect>`;
+  });
+  html += `</svg>`;
+  // line under: cumulative
+  let line2 = svgEl(W,60,'preserveAspectRatio="xMinYMid meet"');
+  const rangeY = maxAbs*2||2;
+  let path = '';
+  pts.forEach((v,i)=>{
+    const x = pad + i*22+11;
+    const y = 30 - (v/maxAbs)*24;
+    path += (i===0?'M':'L')+x+','+y+' ';
+  });
+  line2 += `<line class="grid" x1="${pad}" y1="30" x2="${W-pad}" y2="30" stroke-dasharray="2,3"/>`;
+  line2 += `<path d="${path.trim()}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+  line2 += `</svg>`;
+  return `<div class="scroll-x">${html}</div><div class="faint" style="font-size:10.5px; margin:4px 0 2px;">cumulative net wins</div><div class="scroll-x">${line2}</div>`;
+}
+
+/* ============================================================
+   7. RENDER: OPEN -> EXIT
+   ============================================================ */
+function renderOpenExit(){
+  const closed = STATE.closed;
+  const has = closed.length > 0;
+  document.getElementById('oe-empty').innerHTML = has? '' : emptyStateHTML();
+  document.getElementById('oe-content').style.display = has? '' : 'none';
+  if(!has) return;
+
+  const wins = closed.filter(t=>t.result==='Win');
+  const loses = closed.filter(t=>t.result==='Lose');
+
+  const metrics = [
+    {k:'deltaSigma', label:'Δ Sigma position (σ)', unit:'σ', d:2},
+    {k:'dZonePct', label:'Δ Zone % progress', unit:'%', d:1},
+    {k:'dFutDelta', label:'Δ Fut Δ', unit:'', d:2},
+    {k:'dIV', label:'Δ Recent IV', unit:'%', d:2},
+    {k:'dOiCalls', label:'Δ OI Calls (book)', unit:'', d:0},
+    {k:'dOiPuts', label:'Δ OI Puts (book)', unit:'', d:0},
+    {k:'dOiIvOpen', label:'Δ OI IV Open', unit:'%', d:2},
+    {k:'dIntraCalls', label:'Δ Intraday Calls', unit:'', d:0},
+    {k:'dIntraPuts', label:'Δ Intraday Puts', unit:'', d:0},
+    {k:'dLadderRatio', label:'Δ Ladder Put/Call ratio', unit:'', d:2},
+  ];
+  let rowsHtml = metrics.map(m=>{
+    const wv = mean(wins.map(t=>t[m.k]));
+    const lv = mean(loses.map(t=>t[m.k]));
+    const spread = (wv!==null && lv!==null) ? wv-lv : null;
+    return `<tr>
+      <td class="txt">${m.label}</td>
+      <td class="win-c">${fmtSigned(wv,m.d)}${wv!==null?m.unit:''}</td>
+      <td class="lose-c">${fmtSigned(lv,m.d)}${lv!==null?m.unit:''}</td>
+      <td>${spread!==null? dchip(spread, m.unit) : '—'}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('deltaTable').innerHTML = `
+    <thead><tr><th>Metric (Exit − Open)</th><th>Avg · Wins</th><th>Avg · Losses</th><th>Spread</th></tr></thead>
+    <tbody>${rowsHtml}</tbody>`;
+
+  // Insights
+  document.getElementById('oeInsights').innerHTML = buildOpenExitInsights(closed, wins, loses);
+
+  // Sigma move chart: paired open->exit per trade as small line, colored by result
+  document.getElementById('sigmaMoveChart').innerHTML = sigmaMoveChartHTML(closed);
+
+  // OI ratio chart
+  const ratioItems = closed.filter(t=>t.dLadderRatio!==null).map(t=>({
+    label:'#'+t.magic+' '+t.strategy, value: t.dLadderRatio, color: t.result==='Win'?'var(--win)':t.result==='Lose'?'var(--lose)':'var(--text-faint)', display: fmtSigned(t.dLadderRatio,2)
+  }));
+  document.getElementById('oiRatioChart').innerHTML = ratioItems.length ? barChartH(ratioItems) : '<p class="faint">No ladder OI columns detected in this dataset.</p>';
+
+  // trade cards
+  document.getElementById('tradeCards').innerHTML = closed.slice().reverse().map(tradeCardHTML).join('');
+  document.querySelectorAll('.trade-card .tc-head').forEach(h=>{
+    h.addEventListener('click', ()=> h.parentElement.classList.toggle('expanded'));
+  });
+}
+
+function buildOpenExitInsights(closed, wins, loses){
+  const notes = [];
+  const wSigma = mean(wins.map(t=>t.deltaSigma)), lSigma = mean(loses.map(t=>t.deltaSigma));
+  if(wSigma!==null && lSigma!==null && Math.abs(wSigma-lSigma) > 0.15){
+    notes.push({cls:'', html:`Winning trades moved <b>${fmtSigned(wSigma,2)}σ</b> from open to exit on average, versus <b>${fmtSigned(lSigma,2)}σ</b> for losers. ${Math.abs(wSigma) > Math.abs(lSigma) ? 'Winners are associated with larger sigma travel — the reversion/continuation actually completed.' : 'Losers moved further in σ terms — price kept running past the entry zone instead of resolving back toward it.'}`});
+  }
+  const wRatio = mean(wins.map(t=>t.dLadderRatio)), lRatio = mean(loses.map(t=>t.dLadderRatio));
+  if(wRatio!==null && lRatio!==null){
+    if(lRatio - wRatio > 0.5){
+      notes.push({cls:'lose', html:`Put/Call OI ratio in the near-ATM ladder rose more during losing trades (<b>${fmtSigned(lRatio,2)}</b>) than winning ones (<b>${fmtSigned(wRatio,2)}</b>). Put walls building up during the trade tend to precede adverse moves — worth flagging as a live exit signal.`});
+    } else if(wRatio - lRatio > 0.5){
+      notes.push({cls:'win', html:`Put/Call OI ratio increased more on winners (<b>${fmtSigned(wRatio,2)}</b>) than losers (<b>${fmtSigned(lRatio,2)}</b>) — rising put interest coincided with your edge working, consistent with dealers hedging into the move you're positioned for.`});
+    }
+  }
+  const wIV = mean(wins.map(t=>t.dIV)), lIV = mean(loses.map(t=>t.dIV));
+  if(wIV!==null && lIV!==null && Math.abs(wIV-lIV) > 0.05){
+    notes.push({cls:'', html:`Recent IV drifted <b>${fmtSigned(wIV,2)}%</b> on winners vs <b>${fmtSigned(lIV,2)}%</b> on losers during the trade window. ${ (wIV<lIV) ? 'IV compressing on winners is consistent with a mean-reversion edge — vol calming down as price returned to the zone.' : 'IV expanding on winners suggests the edge benefits from the move getting more volatile, not less.'}`});
+  }
+  const wDur = mean(wins.filter(t=>t.durSec!==null).map(t=>t.durSec)), lDur = mean(loses.filter(t=>t.durSec!==null).map(t=>t.durSec));
+  if(wDur!==null && lDur!==null && Math.abs(wDur-lDur) > 1){
+    notes.push({cls:'', html:`Average hold time: <b>${fmtDur(wDur)}</b> on wins vs <b>${fmtDur(lDur)}</b> on losses. ${wDur<lDur? 'Winners resolve faster — trades that drag on are disproportionately losers, a candidate rule for a time-based stop.' : 'Winners take longer to play out than losers — cutting trades early may be clipping winners before they complete.'}`});
+  }
+  const wOiP = mean(wins.map(t=>t.dOiPuts)), lOiP = mean(loses.map(t=>t.dOiPuts));
+  if(wOiP!==null && lOiP!==null && Math.abs(wOiP-lOiP) > 1){
+    notes.push({cls:'', html:`Book-wide OI Puts changed by <b>${fmtSigned(wOiP,0)}</b> on winners vs <b>${fmtSigned(lOiP,0)}</b> on losers during the trade — a proxy for broader put positioning building or unwinding while you were in the trade.`});
+  }
+  if(!notes.length){
+    notes.push({cls:'', html:'Not enough decided trades yet for the deltas to separate meaningfully. Import more history — the read above updates automatically as the sample grows.'});
+  }
+  return notes.map(n=>`<div class="insight ${n.cls}">${n.html}</div>`).join('');
+}
+
+function sigmaMoveChartHTML(closed){
+  const items = closed.filter(t=>t.openSigma!==null && t.exitSigma!==null);
+  if(!items.length) return '<p class="faint">Zone/Zone% columns missing or unparseable.</p>';
+  const W=560,H=Math.max(140, items.length*20+40), pad=46;
+  const allX = items.flatMap(t=>[t.openSigma,t.exitSigma]);
+  const minX = Math.min(-1,...allX)-0.2, maxX = Math.max(1,...allX)+0.2;
+  const rangeX = maxX-minX;
+  let body = '';
+  for(let s=Math.ceil(minX); s<=Math.floor(maxX); s++){
+    const gx = pad + (s-minX)/rangeX*(W-pad-16);
+    body += `<line class="grid" x1="${gx}" y1="10" x2="${gx}" y2="${H-24}" stroke-dasharray="${s===0?'0':'2,3'}"/>`;
+    body += `<text x="${gx}" y="${H-10}" font-size="9" text-anchor="middle">${s>0?'+':''}${s}σ</text>`;
+  }
+  items.forEach((t,i)=>{
+    const y = 22 + i*20;
+    const x1 = pad + (t.openSigma-minX)/rangeX*(W-pad-16);
+    const x2 = pad + (t.exitSigma-minX)/rangeX*(W-pad-16);
+    const color = t.result==='Win'?'var(--win)':'var(--lose)';
+    body += `<line x1="${x1.toFixed(1)}" y1="${y}" x2="${x2.toFixed(1)}" y2="${y}" stroke="${color}" stroke-width="2" marker-end="url(#arrowhead)"><title>#${esc(t.magic)} ${esc(t.strategy)}</title></line>`;
+    body += `<circle cx="${x1.toFixed(1)}" cy="${y}" r="3" fill="var(--text-faint)"/>`;
+    body += `<circle cx="${x2.toFixed(1)}" cy="${y}" r="3.6" fill="${color}"/>`;
+  });
+  const svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="xMidYMid meet">
+    <defs><marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="context-stroke"/></marker></defs>
+    ${body}
+  </svg>`;
+  return `<div class="scroll-x">${svg}</div><div class="faint" style="font-size:10.5px; margin-top:4px;">grey dot = open · colored dot = exit, per trade</div>`;
+}
+
+function tradeCardHTML(t){
+  const resPill = t.result==='Win' ? '<span class="pill win">Win</span>' : t.result==='Lose' ? '<span class="pill lose">Lose</span>' : '<span class="pill open">Open</span>';
+  return `<div class="trade-card">
+    <div class="tc-head">
+      <div class="tc-meta">
+        ${resPill}
+        <span class="tag">#${esc(t.magic)}</span>
+        <span class="tag">${esc(t.strategy)}${t.martingale?(' · '+esc(t.martingale)):''}</span>
+        <span class="tag">${esc(t.open.date)} ${esc(t.open.time)}</span>
+      </div>
+      <div class="tc-meta">
+        <span class="tag">Δ price <b class="num ${t.priceMove>0?'win-c':t.priceMove<0?'lose-c':''}">${fmtSigned(t.priceMove,1)}</b></span>
+        <span class="tag">Δσ <b class="num">${fmtSigned(t.deltaSigma,2)}</b></span>
+        <span class="tag">${fmtDur(t.durSec)}</span>
+      </div>
+    </div>
+    <div class="tc-body">
+      <div class="diff-grid">
+        <div class="diff-col">
+          <h4>Open</h4>
+          <div class="row"><span>Price</span><span>${fmtNum(t.open.price,1)}</span></div>
+          <div class="row"><span>Zone</span><span>${esc(t.open.zoneRaw||'—')}</span></div>
+          <div class="row"><span>Zone %</span><span>${pctStr(t.open.zonePct,0)}</span></div>
+          <div class="row"><span>σ position (est.)</span><span>${fmtNum(t.openSigma,2)}</span></div>
+          <div class="row"><span>Fut Δ</span><span>${fmtNum(t.open.futDelta,1)}</span></div>
+          <div class="row"><span>Recent IV</span><span>${pctStr(t.open.iv,2)}</span></div>
+          <div class="row"><span>OI Calls / Puts</span><span>${fmtNum(t.open.oiCalls,0)} / ${fmtNum(t.open.oiPuts,0)}</span></div>
+          <div class="row"><span>Ladder Call/Put sum</span><span>${fmtNum(t.openLadder.callSum,0)} / ${fmtNum(t.openLadder.putSum,0)}</span></div>
+          <div class="row"><span>Ladder wall (Call/Put)</span><span>${t.openLadder.maxCall?('ATM'+fmtSigned(t.openLadder.maxCall.offset,0)):'—'} / ${t.openLadder.maxPut?('ATM'+fmtSigned(t.openLadder.maxPut.offset,0)):'—'}</span></div>
+        </div>
+        <div class="diff-col">
+          <h4>Exit</h4>
+          <div class="row"><span>Price</span><span>${t.exit?fmtNum(t.exit.price,1):'—'}</span></div>
+          <div class="row"><span>Zone</span><span>${t.exit?esc(t.exit.zoneRaw||'—'):'—'}</span></div>
+          <div class="row"><span>Zone %</span><span>${t.exit?pctStr(t.exit.zonePct,0):'—'}</span></div>
+          <div class="row"><span>σ position (est.)</span><span>${fmtNum(t.exitSigma,2)}</span></div>
+          <div class="row"><span>Fut Δ</span><span>${t.exit?fmtNum(t.exit.futDelta,1):'—'}</span></div>
+          <div class="row"><span>Recent IV</span><span>${t.exit?pctStr(t.exit.iv,2):'—'}</span></div>
+          <div class="row"><span>OI Calls / Puts</span><span>${t.exit?(fmtNum(t.exit.oiCalls,0)+' / '+fmtNum(t.exit.oiPuts,0)):'—'}</span></div>
+          <div class="row"><span>Ladder Call/Put sum</span><span>${t.exitLadder?(fmtNum(t.exitLadder.callSum,0)+' / '+fmtNum(t.exitLadder.putSum,0)):'—'}</span></div>
+          <div class="row"><span>Ladder wall (Call/Put)</span><span>${t.exitLadder && t.exitLadder.maxCall?('ATM'+fmtSigned(t.exitLadder.maxCall.offset,0)):'—'} / ${t.exitLadder && t.exitLadder.maxPut?('ATM'+fmtSigned(t.exitLadder.maxPut.offset,0)):'—'}</span></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   8. RENDER: ZONE ANALYSIS
+   ============================================================ */
+function renderZone(){
+  const closed = STATE.closed;
+  const has = closed.length > 0;
+  document.getElementById('zn-empty').innerHTML = has? '' : emptyStateHTML();
+  document.getElementById('zn-content').style.display = has? '' : 'none';
+  if(!has) return;
+
+  const withSigma = closed.filter(t=>t.openSigma!==null && (t.result==='Win'||t.result==='Lose'));
+
+  // sigma map scatter
+  document.getElementById('sigmaMapChart').innerHTML = withSigma.length ? scatterSigma(withSigma.map(t=>({
+    x: t.openSigma, color: t.result==='Win'?'var(--win)':'var(--lose)', label:'#'+t.magic+' '+t.strategy+' ('+t.result+') σ='+t.openSigma.toFixed(2)
+  }))) + legendWinLose() : '<p class="faint">No parseable zone data.</p>';
+
+  // win rate by zone band (open zone label)
+  const byBand = groupBy(closed.filter(t=>t.result==='Win'||t.result==='Lose'), t=>t.openZoneLabel||'—');
+  const bandRows = Object.entries(byBand).map(([k,arr])=>{
+    const w=arr.filter(t=>t.result==='Win').length, l=arr.filter(t=>t.result==='Lose').length;
+    return {label:k, n:arr.length, w, l, wr: (w+l)?w/(w+l)*100:null};
+  }).sort((a,b)=>b.n-a.n);
+  document.getElementById('zoneBandTable').innerHTML = heatTable(bandRows, 'Zone band');
+
+  // win rate by zone% bucket (0-25,25-50,50-75,75-100)
+  const buckets = [[0,25],[25,50],[50,75],[75,100],[100,999]];
+  const pctRows = buckets.map(([lo,hi])=>{
+    const arr = closed.filter(t=> t.open.zonePct!==null && t.open.zonePct>=lo && t.open.zonePct<hi && (t.result==='Win'||t.result==='Lose'));
+    const w=arr.filter(t=>t.result==='Win').length, l=arr.filter(t=>t.result==='Lose').length;
+    return {label: hi<999? `${lo}–${hi}%` : `${lo}%+`, n:arr.length, w, l, wr:(w+l)?w/(w+l)*100:null};
+  }).filter(r=>r.n>0);
+  document.getElementById('zonePctTable').innerHTML = heatTable(pctRows, 'Zone % progress');
+
+  // zone x strategy heat
+  const strategies = [...new Set(closed.map(t=>t.strategy))];
+  const bands = [...new Set(closed.map(t=>t.openZoneLabel||'—'))];
+  let heat = '<table class="dt"><thead><tr><th>Strategy \\ Zone</th>'+bands.map(b=>`<th>${esc(b)}</th>`).join('')+'</tr></thead><tbody>';
+  strategies.forEach(s=>{
+    heat += `<tr><td class="txt">${esc(s)}</td>`;
+    bands.forEach(b=>{
+      const arr = closed.filter(t=>t.strategy===s && (t.openZoneLabel||'—')===b && (t.result==='Win'||t.result==='Lose'));
+      if(!arr.length){ heat += '<td class="faint">—</td>'; return; }
+      const w=arr.filter(t=>t.result==='Win').length, l=arr.length-w;
+      const wr=w/arr.length*100;
+      const bg = wr>=50 ? `rgba(30,142,90,${0.12+0.5*((wr-50)/50)})` : `rgba(200,68,44,${0.12+0.5*((50-wr)/50)})`;
+      heat += `<td style="background:${bg}; font-weight:700;">${wr.toFixed(0)}% <span class="faint" style="font-weight:400;">(${arr.length})</span></td>`;
+    });
+    heat += '</tr>';
+  });
+  heat += '</tbody></table>';
+  document.getElementById('zoneStratHeat').innerHTML = heat;
+
+  // zone transitions
+  const decided = closed.filter(t=>t.result==='Win'||t.result==='Lose');
+  const stayed = decided.filter(t=>!t.zoneChanged);
+  const moved = decided.filter(t=>t.zoneChanged);
+  function wrOf(arr){ const w=arr.filter(t=>t.result==='Win').length; return arr.length? (w/arr.length*100).toFixed(0)+'%':'—'; }
+  document.getElementById('zoneTransTable').innerHTML = `
+    <thead><tr><th>Behavior</th><th>N</th><th>Win rate</th></tr></thead>
+    <tbody>
+      <tr><td class="txt">Stayed in same zone band</td><td>${stayed.length}</td><td>${wrOf(stayed)}</td></tr>
+      <tr><td class="txt">Zone band changed by exit</td><td>${moved.length}</td><td>${wrOf(moved)}</td></tr>
+    </tbody>`;
+
+  // distance-from-mean edge: correlation of |openSigma| with win(1)/lose(0)
+  const corrData = withSigma.map(t=>({x: Math.abs(t.openSigma), y: t.result==='Win'?1:0}));
+  const r = pearson(corrData.map(d=>d.x), corrData.map(d=>d.y));
+  let insightHtml = '';
+  if(r!==null){
+    const strength = Math.abs(r) < 0.15 ? 'negligible' : Math.abs(r) < 0.35 ? 'weak' : Math.abs(r) < 0.6 ? 'moderate' : 'strong';
+    const dir = r > 0 ? 'rises' : 'falls';
+    insightHtml += `<div class="insight ${r>0.15?'win':r<-0.15?'lose':''}">Correlation between <b>distance from μ at entry (|σ|)</b> and <b>win outcome</b>: <b>r = ${r.toFixed(2)}</b> (${strength}). Win probability roughly ${dir} as entries get further from the mean${strength==='negligible'?' — not a reliable standalone signal with the current sample size.':'.'}</div>`;
+  }
+  const farRows = distanceBuckets(withSigma);
+  insightHtml += heatTable(farRows, '|σ| from mean');
+  document.getElementById('znInsights').innerHTML = insightHtml;
+  document.getElementById('distanceChart').innerHTML = barChartH(farRows.map(r=>({
+    label: r.label, value: r.wr||0, display: r.wr!==null?r.wr.toFixed(0)+'%':'—ª'.replace('ª',''),
+    color: (r.wr!==null && r.wr>=50)?'var(--win)':'var(--lose)'
+  })), {max:100});
+}
+function legendWinLose(){
+  return `<div style="display:flex; gap:16px; margin-top:6px; font-size:11px;">
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--win);margin-right:5px;"></span>Win</span>
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--lose);margin-right:5px;"></span>Lose</span>
+  </div>`;
+}
+function distanceBuckets(withSigma){
+  const edges = [[0,0.5],[0.5,1],[1,1.5],[1.5,999]];
+  return edges.map(([lo,hi])=>{
+    const arr = withSigma.filter(t=>{ const a=Math.abs(t.openSigma); return a>=lo && a<hi; });
+    const w = arr.filter(t=>t.result==='Win').length;
+    return {label: hi<999?`${lo}–${hi}σ`:`${lo}σ+`, n:arr.length, w, l:arr.length-w, wr: arr.length? w/arr.length*100 : null};
+  }).filter(r=>r.n>0);
+}
+function heatTable(rows, firstCol){
+  if(!rows.length) return '<p class="faint">Not enough data.</p>';
+  return `<table class="dt"><thead><tr><th>${firstCol}</th><th>N</th><th>W</th><th>L</th><th>Win%</th></tr></thead>
+    <tbody>${rows.map(r=>{
+      const bg = r.wr===null? 'transparent' : r.wr>=50 ? `rgba(30,142,90,${0.10+0.45*((r.wr-50)/50)})` : `rgba(200,68,44,${0.10+0.45*((50-r.wr)/50)})`;
+      return `<tr><td class="txt">${esc(r.label)}</td><td>${r.n}</td><td class="win-c">${r.w}</td><td class="lose-c">${r.l}</td><td style="background:${bg}; font-weight:700;">${r.wr!==null?r.wr.toFixed(0)+'%':'—'}</td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+/* ============================================================
+   9. RENDER: LOG
+   ============================================================ */
+function renderLog(){
+  const all = [...STATE.closed, ...STATE.openOnly];
+  const has = all.length > 0;
+  document.getElementById('lg-empty').innerHTML = has? '' : emptyStateHTML();
+  document.getElementById('lg-content').style.display = has? '' : 'none';
+  if(!has) return;
+
+  const stratSel = document.getElementById('fStrategy');
+  const zoneSel = document.getElementById('fZone');
+  const strategies = [...new Set(all.map(t=>t.strategy))].sort();
+  const bands = [...new Set(all.map(t=>t.openZoneLabel||'—'))].sort();
+  if(stratSel.dataset.filled !== '1'){
+    strategies.forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; stratSel.appendChild(o); });
+    stratSel.dataset.filled='1';
+  }
+  if(zoneSel.dataset.filled !== '1'){
+    bands.forEach(b=>{ const o=document.createElement('option'); o.value=b; o.textContent=b; zoneSel.appendChild(o); });
+    zoneSel.dataset.filled='1';
+  }
+  applyLogFilters();
+}
+function applyLogFilters(){
+  const all = [...STATE.closed, ...STATE.openOnly];
+  const fs = document.getElementById('fStrategy').value;
+  const fr = document.getElementById('fResult').value;
+  const fz = document.getElementById('fZone').value;
+  const fsort = document.getElementById('fSort').value;
+  let arr = all.filter(t=>{
+    if(fs && t.strategy!==fs) return false;
+    if(fr === 'OPEN' && t.result!=='OPEN') return false;
+    if((fr==='Win'||fr==='Lose') && t.result!==fr) return false;
+    if(fz && (t.openZoneLabel||'—')!==fz) return false;
+    return true;
+  });
+  if(fsort==='time_desc') arr = arr.slice().sort((a,b)=>b.magicIdx-a.magicIdx);
+  else if(fsort==='time_asc') arr = arr.slice().sort((a,b)=>a.magicIdx-b.magicIdx);
+  else if(fsort==='move_desc') arr = arr.slice().sort((a,b)=>Math.abs(b.priceMove||0)-Math.abs(a.priceMove||0));
+  else if(fsort==='dur_desc') arr = arr.slice().sort((a,b)=>(b.durSec||0)-(a.durSec||0));
+
+  document.getElementById('logCount').textContent = `${arr.length} of ${all.length} trades shown`;
+  const rows = arr.map(t=>{
+    const pill = t.result==='Win'?'<span class="pill win">Win</span>':t.result==='Lose'?'<span class="pill lose">Lose</span>':'<span class="pill open">Open</span>';
+    return `<tr>
+      <td>${esc(t.magic)}</td>
+      <td class="txt">${esc(t.strategy)}</td>
+      <td class="txt">${esc(t.martingale||'—')}</td>
+      <td>${pill}</td>
+      <td>${fmtNum(t.open.price,1)}</td>
+      <td>${t.exit?fmtNum(t.exit.price,1):'—'}</td>
+      <td class="${t.priceMove>0?'win-c':t.priceMove<0?'lose-c':''}">${fmtSigned(t.priceMove,1)}</td>
+      <td class="txt">${esc(t.openZoneLabel||'—')}</td>
+      <td class="txt">${esc(t.exitZoneLabel||'—')}</td>
+      <td>${fmtDur(t.durSec)}</td>
+      <td class="txt">${esc(t.open.date)} ${esc(t.open.time)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('logTable').innerHTML = `
+    <thead><tr><th>Magic</th><th>Strategy</th><th>Martingale</th><th>Result</th><th>Open px</th><th>Exit px</th><th>Δ px</th><th>Zone open</th><th>Zone exit</th><th>Duration</th><th>Timestamp</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="11" class="faint txt">No trades match these filters.</td></tr>'}</tbody>`;
+}
+
+/* ============================================================
+   10. EMPTY STATE
+   ============================================================ */
+function emptyStateHTML(){
+  return `<div class="empty-state">
+    <h3>No data loaded</h3>
+    <p>Import your Google Sheet — copy the range including the header row and paste it in, or upload a CSV export. Click <b>Load demo data</b> in the import dialog to preview the analyzer first.</p>
+    <button class="btn primary" onclick="document.getElementById('btnImport').click()">Import data</button>
+  </div>`;
+}
+
+/* ============================================================
+   11. TAB / THEME / MODAL WIRING
+   ============================================================ */
+function setTab(name){
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active', p.id==='panel-'+name));
+}
+document.getElementById('tabs').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-tab]');
+  if(btn) setTab(btn.dataset.tab);
+});
+
+function setTheme(t){
+  document.body.setAttribute('data-theme', t);
+  localStorage.setItem(THEME_KEY, t);
+  const icon = document.getElementById('themeIcon');
+  icon.innerHTML = t==='dark'
+    ? '<path d="M21 12.4A8.5 8.5 0 1111.6 3 7 7 0 0021 12.4z" fill="currentColor" stroke="none"/>'
+    : '<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" stroke-linecap="round"/>';
+}
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  setTheme(document.body.getAttribute('data-theme')==='dark'?'light':'dark');
+});
+
+const modal = document.getElementById('importModal');
+document.getElementById('btnImport').addEventListener('click', ()=>{ modal.classList.add('show'); updateLiveUI(); });
+setInterval(()=>{ if(LIVE.enabled && modal.classList.contains('show')) updateLiveUI(); }, 5000);
+document.getElementById('closeModal').addEventListener('click', ()=> modal.classList.remove('show'));
+modal.addEventListener('click', e=>{ if(e.target===modal) modal.classList.remove('show'); });
+
+document.getElementById('fileInput').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=> { document.getElementById('pasteArea').value = reader.result; updatePreview(); };
+  reader.readAsText(f);
+});
+document.getElementById('pasteArea').addEventListener('input', updatePreview);
+function updatePreview(){
+  const txt = document.getElementById('pasteArea').value;
+  const p = parseRawText(txt);
+  document.getElementById('parsePreview').textContent = txt.trim() ? `${p.count} row(s) detected` : '';
+}
+
+document.getElementById('btnLiveConnect').addEventListener('click', connectLiveSheet);
+document.getElementById('btnLiveRefreshNow').addEventListener('click', ()=> fetchAndIngestSheet(true));
+document.getElementById('btnLiveDisconnect').addEventListener('click', ()=>{
+  if(confirm('Disconnect from the live Google Sheet? Your locally loaded data stays put until you clear or replace it.')) disconnectLiveSheet();
+});
+document.getElementById('liveInterval').addEventListener('change', ()=>{
+  if(LIVE.enabled){ LIVE.intervalSec = parseInt(document.getElementById('liveInterval').value,10); saveLiveConfig(); startAutoSync(); }
+});
+
+document.getElementById('btnLoadSample').addEventListener('click', ()=>{
+  document.getElementById('pasteArea').value = SAMPLE_TSV;
+  updatePreview();
+});
+document.getElementById('btnAppend').addEventListener('click', ()=>{
+  const txt = document.getElementById('pasteArea').value;
+  if(!txt.trim()){ alert('Paste some data first.'); return; }
+  if(ingest(txt, 'append')){ modal.classList.remove('show'); document.getElementById('pasteArea').value=''; renderAll(); }
+});
+document.getElementById('btnReplace').addEventListener('click', ()=>{
+  const txt = document.getElementById('pasteArea').value;
+  if(!txt.trim()){ alert('Paste some data first.'); return; }
+  if(confirm('Replace all currently loaded data with this import?') && ingest(txt, 'replace')){
+    modal.classList.remove('show'); document.getElementById('pasteArea').value=''; renderAll();
+  }
+});
+document.getElementById('btnClear').addEventListener('click', ()=>{
+  if(confirm('Clear all stored journal data from this browser? This cannot be undone.')){
+    localStorage.removeItem(STORE_KEY);
+    STATE = {rows:[], closed:[], openOnly:[], isDemo:false};
+    renderAll();
+  }
+});
+document.getElementById('btnExport').addEventListener('click', ()=>{
+  if(!STATE.rows.length){ alert('No data to export.'); return; }
+  // export minimal reconstructed CSV of core fields (ladder omitted for portability)
+  const header = ['Future Price','Result','Strategy','Martingale','Magic #','Type','Date','Time','DTE','SD','Mean (μ)','Expected Distance','Recent IV','Intraday Calls','Intraday Puts','OI Calls','OI Puts','OI IV Open','Fut Δ','Zone','Zone %'];
+  const lines = [header.join(',')];
+  STATE.rows.forEach(r=>{
+    lines.push([r.price,r.result,r.strategy,r.martingale,r.magic,r.type,r.date,r.time,r.dte,r.sd,r.mean,r.expDist,r.iv,r.intraCalls,r.intraPuts,r.oiCalls,r.oiPuts,r.oiIvOpen,r.futDelta,r.zoneRaw,r.zonePctRef!==null?(r.zonePct+'% from '+r.zonePctRef+'σ'):''].map(v=>{
+      v = v===null||v===undefined?'':String(v);
+      return v.includes(',') ? `"${v}"` : v;
+    }).join(','));
+  });
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ledger_export.csv';
+  a.click();
+});
+
+['fStrategy','fResult','fZone','fSort'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', applyLogFilters);
+});
+
+/* ============================================================
+   12. INIT
+   ============================================================ */
+function updateStatusChip(){
+  const total = STATE.closed.length + STATE.openOnly.length;
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.classList.remove('empty','live');
+  if(total===0 && !LIVE.enabled){ dot.classList.add('empty'); txt.textContent='no data'; return; }
+  if(LIVE.enabled){ dot.classList.add('live'); } 
+  txt.textContent = `${total} trade${total===1?'':'s'}${STATE.isDemo?' · demo':''}${LIVE.enabled?' · live':''}`;
+}
+function renderAll(){
+  recompute();
+  updateStatusChip();
+  renderOverview();
+  renderOpenExit();
+  renderZone();
+  renderLog();
+}
+
+(function init(){
+  const savedTheme = localStorage.getItem(THEME_KEY) || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark':'light');
+  setTheme(savedTheme);
+  const found = load();
+  if(!found){
+    // seed with demo so first-run isn't blank
+    const parsed = parseRawText(SAMPLE_TSV);
+    STATE.rows = parsed.rows;
+    STATE.rows.forEach((r,i)=>r._rowIndex=i);
+    STATE.isDemo = true;
+  }
+  renderAll();
+
+  const hadLive = loadLiveConfig();
+  if(hadLive && LIVE.enabled && LIVE.id){
+    updateLiveUI();
+    fetchAndIngestSheet(false).then(()=> startAutoSync());
+  }
+})();
+
+})();
+</script>
+</body>
+</html>
